@@ -80,11 +80,28 @@
             avgTER: 0,
             lastUpdate: ''
         });
+        const [displayStats, setDisplayStats] = useState({
+            totalFunds: 0,
+            totalNAV: 0,
+            avgTER: 0
+        });
 
         useEffect(() => {
             loadData();
             loadAssetClasses();
         }, []);
+
+        // Пересчитываем статистику при изменении отфильтрованных данных
+        useEffect(() => {
+            calculateDisplayStats();
+        }, [filteredData]);
+
+        // ИСПРАВЛЕНИЕ: добавлен useEffect для перезагрузки данных при изменении сортировки
+        useEffect(() => {
+            if (!loading) {
+                loadData();
+            }
+        }, [sortBy, sortOrder]);
 
         const loadData = async () => {
             setLoading(true);
@@ -94,7 +111,15 @@
                 if (!response.ok) throw new Error('Ошибка загрузки данных');
                 const data = await response.json();
                 setEtfData(data || []);
-                setFilteredData(data || []);
+
+                // ИСПРАВЛЕНИЕ: применяем фильтр по классу активов после загрузки
+                if (selectedAssetClass === 'Все') {
+                    setFilteredData(data || []);
+                } else {
+                    const filtered = (data || []).filter(etf => etf.assetClass === selectedAssetClass);
+                    setFilteredData(filtered);
+                }
+
                 await loadStats();
             } catch (err) {
                 setError(err.message);
@@ -131,10 +156,42 @@
             }
         };
 
+        const calculateDisplayStats = () => {
+            if (filteredData.length === 0) {
+                setDisplayStats({
+                    totalFunds: 0,
+                    totalNAV: 0,
+                    avgTER: 0
+                });
+                return;
+            }
+
+            const totalNAV = filteredData.reduce((sum, etf) => {
+                return sum + (etf.navMillionRub || 0);
+            }, 0);
+
+            const terValues = filteredData.filter(etf => etf.terPercent !== null && etf.terPercent !== undefined);
+            const avgTER = terValues.length > 0
+                ? terValues.reduce((sum, etf) => sum + etf.terPercent, 0) / terValues.length
+                : 0;
+
+            setDisplayStats({
+                totalFunds: filteredData.length,
+                totalNAV: totalNAV,
+                avgTER: avgTER
+            });
+        };
+
         const handleSearch = async (term) => {
             setSearchTerm(term);
             if (!term.trim()) {
-                setFilteredData(etfData);
+                // ИСПРАВЛЕНИЕ: при очистке поиска применяем фильтр по классу активов
+                if (selectedAssetClass === 'Все') {
+                    setFilteredData(etfData);
+                } else {
+                    const filtered = etfData.filter(etf => etf.assetClass === selectedAssetClass);
+                    setFilteredData(filtered);
+                }
                 return;
             }
 
@@ -149,13 +206,16 @@
         };
 
         useEffect(() => {
+            // ИСПРАВЛЕНИЕ: сброс поиска при изменении класса активов
+            setSearchTerm('');
+
             if (selectedAssetClass === 'Все') {
-                loadData();
+                setFilteredData(etfData);
             } else {
                 const filtered = etfData.filter(etf => etf.assetClass === selectedAssetClass);
                 setFilteredData(filtered);
             }
-        }, [selectedAssetClass]);
+        }, [selectedAssetClass, etfData]);
 
         const handleScrape = async () => {
             try {
@@ -237,8 +297,9 @@
                         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-slate-600 text-sm mb-1">Всего фондов</p>
-                                    <p className="text-3xl font-bold text-slate-800">{stats.totalFunds}</p>
+                                    <p className="text-slate-600 text-sm mb-1">Фондов в выборке</p>
+                                    <p className="text-3xl font-bold text-slate-800">{displayStats.totalFunds}</p>
+                                    <p className="text-xs text-slate-400 mt-1">из {stats.totalFunds} всего</p>
                                 </div>
                                 <DollarSign className="w-12 h-12 text-blue-500 opacity-20" />
                             </div>
@@ -247,10 +308,11 @@
                         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-slate-600 text-sm mb-1">Общая СЧА</p>
+                                    <p className="text-slate-600 text-sm mb-1">СЧА в выборке</p>
                                     <p className="text-2xl font-bold text-slate-800">
-                                        {(stats.totalNAV / 1000).toFixed(1)}B ₽
+                                        {(displayStats.totalNAV / 1000).toFixed(1)}B ₽
                                     </p>
+                                    <p className="text-xs text-slate-400 mt-1">из {(stats.totalNAV / 1000).toFixed(1)}B ₽</p>
                                 </div>
                                 <TrendingUp className="w-12 h-12 text-green-500 opacity-20" />
                             </div>
@@ -260,7 +322,8 @@
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-slate-600 text-sm mb-1">Средний TER</p>
-                                    <p className="text-3xl font-bold text-slate-800">{stats.avgTER.toFixed(2)}%</p>
+                                    <p className="text-3xl font-bold text-slate-800">{displayStats.avgTER.toFixed(2)}%</p>
+                                    <p className="text-xs text-slate-400 mt-1">в выборке</p>
                                 </div>
                                 <Filter className="w-12 h-12 text-purple-500 opacity-20" />
                             </div>
@@ -322,6 +385,7 @@
                                     <button
                                         onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
                                         className="px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg hover:bg-slate-200 transition"
+                                        title={sortOrder === 'asc' ? 'По возрастанию' : 'По убыванию'}
                                     >
                                         {sortOrder === 'asc' ? '↑' : '↓'}
                                     </button>
@@ -392,25 +456,25 @@
                                         <td className="px-6 py-4 text-right">
                                             {etf.priceChange6M ? (
                                                 <span className={`font-medium ${etf.priceChange6M >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {etf.priceChange6M >= 0 ? '+' : ''}{etf.priceChange6M.toFixed(2)}
-                                                        </span>
+                                                    {etf.priceChange6M >= 0 ? '+' : ''}{etf.priceChange6M.toFixed(2)}
+                                                </span>
                                             ) : '-'}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             {etf.priceChange2024 ? (
                                                 <span className={`font-medium ${etf.priceChange2024 >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {etf.priceChange2024 >= 0 ? '+' : ''}{etf.priceChange2024.toFixed(2)}
-                                                        </span>
+                                                    {etf.priceChange2024 >= 0 ? '+' : ''}{etf.priceChange2024.toFixed(2)}
+                                                </span>
                                             ) : '-'}
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                                    <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
-                                                        etf.tradeStatus === 'Торгуется'
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-red-100 text-red-800'
-                                                    }`}>
-                                                        {etf.tradeStatus}
-                                                    </span>
+                                            <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
+                                                etf.tradeStatus === 'Торгуется'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {etf.tradeStatus}
+                                            </span>
                                         </td>
                                     </tr>
                                 ))}
