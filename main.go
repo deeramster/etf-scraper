@@ -149,6 +149,46 @@ func parseNumber(text string) *float64 {
 	return &val
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func parseRussianMonth(month string) string {
+	months := map[string]string{
+		"января":   "01",
+		"февраля":  "02",
+		"марта":    "03",
+		"апреля":   "04",
+		"мая":      "05",
+		"июня":     "06",
+		"июля":     "07",
+		"августа":  "08",
+		"сентября": "09",
+		"октября":  "10",
+		"ноября":   "11",
+		"декабря":  "12",
+	}
+
+	monthLower := strings.ToLower(month)
+	if num, ok := months[monthLower]; ok {
+		return num
+	}
+	return "00"
+}
+
+func formatRussianDate(day, month, year string) string {
+	monthNum := parseRussianMonth(month)
+
+	if len(day) == 1 {
+		day = "0" + day
+	}
+
+	return year + "-" + monthNum + "-" + day
+}
+
 func (s *ETFScraper) ScrapeData() ([]ETFData, error) {
 	log.Printf("Начинаем скрейпинг %s", s.URL)
 
@@ -165,15 +205,41 @@ func (s *ETFScraper) ScrapeData() ([]ETFData, error) {
 
 	c.OnHTML("body", func(e *colly.HTMLElement) {
 		text := e.Text
-		re := regexp.MustCompile(`Последнее обновление:\s*\*\*(\d{1,2}\s+\w+\s+\d{4})`)
-		matches := re.FindStringSubmatch(text)
-		if len(matches) > 1 {
-			lastUpdateDate = matches[1]
-			log.Printf("Найдена дата обновления: %s", lastUpdateDate)
+
+		idx := strings.Index(text, "Последнее обновление:")
+		if idx != -1 {
+			fragment := text[idx+len("Последнее обновление:"):]
+			if len(fragment) > 100 {
+				fragment = fragment[:100]
+			}
+
+			fragment = strings.TrimSpace(fragment)
+
+			re := regexp.MustCompile(`(\d{1,2})\s+(\p{L}+)\s+(\d{4})`)
+			matches := re.FindStringSubmatch(fragment)
+
+			if len(matches) >= 4 {
+				day := matches[1]
+				month := matches[2]
+				year := matches[3]
+
+				lastUpdateDate = formatRussianDate(day, month, year)
+				log.Printf("Найдена дата обновления: '%s' (исходная: %s %s %s)", lastUpdateDate, day, month, year)
+			} else {
+				log.Printf("ПРЕДУПРЕЖДЕНИЕ: Не удалось распарсить дату")
+				log.Printf("Фрагмент: '%s'", fragment[:min(50, len(fragment))])
+			}
+		} else {
+			log.Printf("ПРЕДУПРЕЖДЕНИЕ: Текст 'Последнее обновление:' не найден на странице")
 		}
 	})
 
 	c.OnHTML("table", func(e *colly.HTMLElement) {
+		// Проверяем, что дата уже найдена
+		if lastUpdateDate == "" {
+			log.Printf("ПРЕДУПРЕЖДЕНИЕ: Дата обновления не найдена!")
+		}
+
 		e.DOM.Find("tr").Each(func(i int, row *goquery.Selection) {
 			rowCount++
 
@@ -200,6 +266,7 @@ func (s *ETFScraper) ScrapeData() ([]ETFData, error) {
 			if i <= 3 {
 				log.Printf("\n=== Строка %d ===", i)
 				log.Printf("Колонок всего: %d", len(cols))
+				log.Printf("Дата обновления с сайта: '%s'", lastUpdateDate)
 				for idx := 0; idx < len(cols) && idx < 21; idx++ {
 					log.Printf("  [%d] = '%s'", idx, cols[idx])
 				}
@@ -240,8 +307,8 @@ func (s *ETFScraper) ScrapeData() ([]ETFData, error) {
 				if etf.NAVMillionRub != nil {
 					nav = fmt.Sprintf("%.0f", *etf.NAVMillionRub)
 				}
-				log.Printf("Строка %d: Тикер=%s, TER_raw='%s', TER=%s, NAV_raw='%s', NAV=%s",
-					i, etf.Ticker, cols[5], ter, cols[19], nav)
+				log.Printf("Строка %d: Тикер=%s, TER_raw='%s', TER=%s, NAV_raw='%s', NAV=%s, UpdateDate=%s",
+					i, etf.Ticker, cols[5], ter, cols[19], nav, etf.LastUpdateDate)
 			}
 
 			data = append(data, etf)
@@ -264,9 +331,14 @@ func (s *ETFScraper) ScrapeData() ([]ETFData, error) {
 	log.Printf("Обработано строк: %d", rowCount)
 	log.Printf("Ошибок парсинга: %d", errorCount)
 	log.Printf("Успешно извлечено записей: %d", len(data))
+	log.Printf("Дата обновления с сайта: %s", lastUpdateDate)
 
 	if len(data) == 0 {
 		return nil, fmt.Errorf("не удалось извлечь данные из таблицы")
+	}
+
+	if lastUpdateDate == "" {
+		log.Printf("ПРЕДУПРЕЖДЕНИЕ: Дата обновления не была найдена на странице!")
 	}
 
 	return data, nil

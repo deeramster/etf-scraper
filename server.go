@@ -232,10 +232,22 @@ func (s *APIServer) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.DB.QueryRow("SELECT MAX(date_scraped) FROM etf_data").Scan(&stats.LastUpdate)
+	var rawDate string
+	err = s.DB.QueryRow(`
+		SELECT last_update_date 
+		FROM etf_data 
+		WHERE date_scraped = (SELECT MAX(date_scraped) FROM etf_data)
+		LIMIT 1
+	`).Scan(&rawDate)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if rawDate == "" {
+		stats.LastUpdate = "Нет данных"
+	} else {
+		stats.LastUpdate = rawDate
 	}
 
 	respondJSON(w, stats)
