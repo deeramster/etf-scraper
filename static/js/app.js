@@ -1,5 +1,3 @@
-// Главный компонент приложения ETF Dashboard
-
 const { useState, useEffect } = React;
 
 const ETFDashboard = () => {
@@ -130,16 +128,6 @@ const ETFDashboard = () => {
     // Использование debounce для поиска
     const debouncedSearch = debounce(handleSearch, 300);
 
-    // Запуск скрейпинга
-    const handleScrape = async () => {
-        try {
-            await apiService.startScraping();
-            alert('Скрейпинг запущен в фоновом режиме. Обновите данные через несколько минут.');
-        } catch (err) {
-            alert('Ошибка: ' + err.message);
-        }
-    };
-
     // Экспорт в CSV
     const handleExport = () => {
         exportToCSV(filteredData, 'etf_data');
@@ -210,7 +198,7 @@ const ETFDashboard = () => {
                 displayStats
             }),
 
-            // Панель фильтров
+            // Панель фильтров (БЕЗ обработчика onScrape)
             React.createElement(FilterPanel, {
                 searchTerm,
                 onSearchChange: (term) => {
@@ -225,7 +213,6 @@ const ETFDashboard = () => {
                 sortOrder,
                 onSortOrderToggle: () => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'),
                 onRefresh: loadData,
-                onScrape: handleScrape,
                 onExport: handleExport
             }),
 

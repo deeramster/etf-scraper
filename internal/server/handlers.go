@@ -4,14 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
 	"etf-scraper/internal/config"
 	"etf-scraper/internal/database"
 	"etf-scraper/internal/models"
-	"etf-scraper/internal/scraper"
 
 	"github.com/gorilla/mux"
 )
@@ -316,23 +314,6 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, etfs)
-}
-
-// HandleScrape запускает скрейпинг в фоновом режиме
-func (h *Handlers) HandleScrape(w http.ResponseWriter, r *http.Request) {
-	go func() {
-		s := scraper.NewScraper(h.config, h.repo)
-		if err := s.Run(); err != nil {
-			log.Printf("Ошибка скрейпинга: %v", err)
-			return
-		}
-		log.Println("Скрейпинг завершен успешно")
-	}()
-
-	respondJSON(w, models.ScrapeResponse{
-		Status:  "started",
-		Message: "Scraping started in background",
-	})
 }
 
 // respondJSON отправляет JSON ответ

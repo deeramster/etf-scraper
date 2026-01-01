@@ -1,5 +1,3 @@
-// Компонент панели фильтров и управления
-
 const FilterPanel = ({
                          searchTerm,
                          onSearchChange,
@@ -11,7 +9,6 @@ const FilterPanel = ({
                          sortOrder,
                          onSortOrderToggle,
                          onRefresh,
-                         onScrape,
                          onExport
                      }) => {
     return React.createElement('div', {
@@ -81,7 +78,7 @@ const FilterPanel = ({
             )
         ),
 
-        // Кнопки действий
+        // Кнопки действий (БЕЗ кнопки скрейпинга)
         React.createElement('div', { className: 'flex gap-2 mt-4' },
             React.createElement('button', {
                     onClick: onRefresh,
@@ -89,13 +86,6 @@ const FilterPanel = ({
                 },
                 React.createElement(RefreshCw, { className: 'w-4 h-4' }),
                 'Обновить данные'
-            ),
-            React.createElement('button', {
-                    onClick: onScrape,
-                    className: 'flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition'
-                },
-                React.createElement(TrendingUp, { className: 'w-4 h-4' }),
-                'Запустить скрейпинг'
             ),
             React.createElement('button', {
                     onClick: onExport,
