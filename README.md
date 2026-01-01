@@ -6,7 +6,7 @@
 
 Проект полностью переработан в модульную структуру для лучшей поддерживаемости и масштабируемости.
 
-### Backend (Go)
+### Backend
 
 ```
 internal/
@@ -17,7 +17,7 @@ internal/
 └── server/         # HTTP сервер, handlers, middleware
 ```
 
-### Frontend (React)
+### Frontend
 
 ```
 static/
